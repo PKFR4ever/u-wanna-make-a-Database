@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15) # 指定最低 CMake 版本
 set(CMAKE_CXX_STANDARD 14)  # 或者 C++14、C++17 等
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_compile_options(-std=c++14)
+# add_compile_options(-std=c++14)
 add_definitions(-DGTEST_IS_THREADSAFE=1)
 
 project(myDatabase)                   # 设置项目名称
