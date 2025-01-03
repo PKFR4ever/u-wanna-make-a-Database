@@ -1,5 +1,6 @@
 #include <bits/stdc++.h>
-using namespace std;
+
+// using namespace std;
 
 // 类型名用的驼峰
 // 变量名/函数名用的下划线分隔
@@ -104,21 +105,21 @@ struct Statement{
 
 // 处理 .开头的meta cmd 这些都不是sql语句
 // 目前只能处理.exit
-MetaCmdResult do_meta_cmd(string meta_cmd){
+MetaCmdResult do_meta_cmd(std::string meta_cmd){
   if(meta_cmd == ".exit") exit(0);
   return META_CMD_UNRECOGNIZED;
 }
 
 // 检查input_buffer是否是合法的statement 并塞进statement
 // 需要解析input_buffer的语法
-PrepareResult prepare_statment(string input_buffer, Statement* statement){
-  const string insert_str = "insert";
-  const string select_str = "select";
+PrepareResult prepare_statment(std::string input_buffer, Statement* statement){
+  const std::string insert_str = "insert";
+  const std::string select_str = "select";
 
   // 参数解析放外面
-  istringstream iss(input_buffer);
-  vector<string> args;
-  string temp;
+  std::istringstream iss(input_buffer);
+  std::vector<std::string> args;
+  std::string temp;
   while(iss >> temp){
     args.push_back(temp);
   }
@@ -167,7 +168,7 @@ ExecuteResult execute_insert(Statement* statement, Table* table){
   put_row_to_table(row_to_insert, row_slot(table, table->num_rows));
 
   table->num_rows++;
-  cout << "Insert done.\n";
+  std::cout << "Insert done.\n";
   return EXECUTE_SUCCESS;
 }
 
@@ -178,7 +179,7 @@ ExecuteResult execute_select(Statement* statement, Table* table){
     get_row_from_table(&row_now, row_slot(table, i));
     print_row(&row_now);
   }
-  cout << "Select done.\n";
+  std::cout << "Select done.\n";
   return EXECUTE_SUCCESS;
 }
 
@@ -198,12 +199,12 @@ ExecuteResult execute_statment(Statement* statement, Table* table){
 }
 
 int main(int argc,char **argv){
-  string input_buffer;
+  std::string input_buffer;
   Table* table = new Table;
 
   while(1){
     std::cout << "db > ";
-    getline(cin, input_buffer);
+    std::getline(std::cin, input_buffer);
     // 处理空行退出的bug
     if(input_buffer.size() == 0) continue;
 
@@ -214,7 +215,7 @@ int main(int argc,char **argv){
           continue;
         }
         case (META_CMD_UNRECOGNIZED):{
-          cout << "Unrecognized command " << input_buffer << '\n';
+          std::cout << "Unrecognized command " << input_buffer << '\n';
           continue;
         }
       }
@@ -227,26 +228,26 @@ int main(int argc,char **argv){
         break;
       }
       case (PREPARE_SYNTAX_ERROR):{
-        cout << "Syntax error. Could not parse statement.\n";
+        std::cout << "Syntax error. Could not parse statement.\n";
         continue;
       }
       case (PREPARE_UNRECOGNIZED_STATEMENT):{
-        cout << "Unrecognized keyword at start of " << input_buffer << '\n';
+        std::cout << "Unrecognized keyword at start of " << input_buffer << '\n';
         continue;
       }
     }
 
     switch (execute_statment(&statement, table)) {
       case (EXECUTE_SUCCESS):{
-        cout << "Executed\n";
+        std::cout << "Executed\n";
         break;
       }
       case (EXECUTE_TABLE_FULL):{
-        cout << "Error: Table full\n";
+        std::cout << "Error: Table full\n";
         continue;
       }
       case (EXECUTE_UNRECOGNIZED_STATEMENT):{
-        cout << "Unrecognized keyword\n";
+        std::cout << "Unrecognized keyword\n";
         continue;
       }
     }
