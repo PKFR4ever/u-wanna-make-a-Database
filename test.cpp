@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <fstream>
+#include <stdio.h>
 
 #define USERNAME_SIZE 32 // username字段 4 byte
 #define EMAIL_SIZE 255 // email字段 4 byte
