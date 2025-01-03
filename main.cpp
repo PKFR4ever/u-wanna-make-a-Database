@@ -5,12 +5,12 @@ using namespace std;
 // 变量名/函数名用的下划线分隔
 // 宏定义用全大写 + 下划线分隔
 
-#define ID_SIZE 4
-#define USERNAME_SIZE 32
-#define EMAIL_SIZE 255
-#define ID_OFFSET 0
-#define USERNAME_OFFSET ID_SIZE
-#define EMAIL_OFFSET (ID_SIZE+USERNAME_SIZE)
+#define ID_SIZE 4  // id字段 4 byte
+#define USERNAME_SIZE 32 // username字段 4 byte
+#define EMAIL_SIZE 255 // email字段 4 byte
+#define ID_OFFSET 0 // id字段起始偏移
+#define USERNAME_OFFSET ID_SIZE // Iusername字段起始偏移
+#define EMAIL_OFFSET (ID_SIZE+USERNAME_SIZE) // email字段起始偏移
 
 #define PAGE_SIZE 4096 // 4kB 一页
 #define ROW_SIZE (ID_SIZE+USERNAME_SIZE+EMAIL_SIZE) // 291 byte
@@ -32,6 +32,7 @@ typedef enum{
   PREPARE_INVALID_ARGS
 } PrepareResult;
 
+// 标识execute的结果
 typedef enum{
   EXECUTE_SUCCESS,
   EXECUTE_TABLE_FULL,
@@ -235,8 +236,20 @@ int main(int argc,char **argv){
       }
     }
 
-    execute_statment(&statement, table);
-    cout << "Executed\n";
+    switch (execute_statment(&statement, table)) {
+      case (EXECUTE_SUCCESS):{
+        cout << "Executed\n";
+        break;
+      }
+      case (EXECUTE_TABLE_FULL):{
+        cout << "Error: Table full\n";
+        continue;
+      }
+      case (EXECUTE_UNRECOGNIZED_STATEMENT):{
+        cout << "Unrecognized keyword\n";
+        continue;
+      }
+    }
   }
   return 0;
 }
