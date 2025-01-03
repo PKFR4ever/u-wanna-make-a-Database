@@ -7,8 +7,8 @@
 // 宏定义用全大写 + 下划线分隔
 
 #define ID_SIZE 4  // id字段 4 byte
-#define USERNAME_SIZE 32 // username字段 4 byte
-#define EMAIL_SIZE 255 // email字段 4 byte
+#define USERNAME_SIZE 32 // username字段 32 byte
+#define EMAIL_SIZE 256 // email字段 256 byte
 #define ID_OFFSET 0 // id字段起始偏移
 #define USERNAME_OFFSET ID_SIZE // Iusername字段起始偏移
 #define EMAIL_OFFSET (ID_SIZE+USERNAME_SIZE) // email字段起始偏移
@@ -50,8 +50,8 @@ typedef enum{
 // | id | username | email | 结构的小型数据库
 struct Row{ // total 291 byte
   int id;  // 4 byte
-  char username[USERNAME_SIZE]; // max 32 byte 
-  char email[EMAIL_SIZE];    // max 255 byte
+  char username[USERNAME_SIZE]; // 最多31字符
+  char email[EMAIL_SIZE];    // 最多255字符
 };
 
 void print_row(Row* row) {
@@ -127,7 +127,7 @@ PrepareResult prepare_statment(std::string input_buffer, Statement* statement){
   // 目前适配的语法：
   // insert id(int) username(string) email(string)
   if(args[0] == insert_str) {
-    if(args.size() != 4) 
+    if(args.size() != 4) return PREPARE_SYNTAX_ERROR;
 
     // 处理参数过长
     if(args[2].size() >= USERNAME_SIZE) return PREPARE_INVALID_ARGS;
@@ -140,6 +140,7 @@ PrepareResult prepare_statment(std::string input_buffer, Statement* statement){
     catch (std::invalid_argument){
       return PREPARE_SYNTAX_ERROR;
     }
+    if(statement->row_to_insert.id < 0) return PREPARE_INVALID_ARGS;
     strcpy(statement->row_to_insert.username, args[2].c_str());
     strcpy(statement->row_to_insert.email, args[3].c_str());
 
@@ -160,7 +161,9 @@ PrepareResult prepare_statment(std::string input_buffer, Statement* statement){
 // 执行insert
 ExecuteResult execute_insert(Statement* statement, Table* table){
   // 插入判满
-  if(table->num_rows >= TABLE_MAX_ROWS) return EXECUTE_TABLE_FULL;
+  if(table->num_rows >= TABLE_MAX_ROWS){
+    return EXECUTE_TABLE_FULL;
+  }
       
   Row* row_to_insert = &(statement->row_to_insert);
   // 把arg0放进arg1返回的位置
@@ -168,34 +171,34 @@ ExecuteResult execute_insert(Statement* statement, Table* table){
   put_row_to_table(row_to_insert, row_slot(table, table->num_rows));
 
   table->num_rows++;
-  std::cout << "Insert done.\n";
   return EXECUTE_SUCCESS;
 }
 
 // 执行select
 ExecuteResult execute_select(Statement* statement, Table* table){
   Row row_now;
+  std::cout << '\n';
   for(int i=0;i<table->num_rows;i++){
     get_row_from_table(&row_now, row_slot(table, i));
     print_row(&row_now);
   }
-  std::cout << "Select done.\n";
   return EXECUTE_SUCCESS;
 }
 
 // 执行statement
 ExecuteResult execute_statment(Statement* statement, Table* table){
+  ExecuteResult res = EXECUTE_UNRECOGNIZED_STATEMENT;
   switch (statement->type){
     case (INSERT):{
-      ExecuteResult res = execute_insert(statement, table);
+      res = execute_insert(statement, table);
       break;
     }
     case (SELECT):{
-      ExecuteResult res = execute_select(statement, table);
+      res = execute_select(statement, table);
       break;
     }
   }
-  return EXECUTE_UNRECOGNIZED_STATEMENT;
+  return res;
 }
 
 int main(int argc,char **argv){
@@ -228,11 +231,15 @@ int main(int argc,char **argv){
         break;
       }
       case (PREPARE_SYNTAX_ERROR):{
-        std::cout << "Syntax error. Could not parse statement.\n";
+        std::cout << "Syntax error. Could not parse statement\n";
         continue;
       }
       case (PREPARE_UNRECOGNIZED_STATEMENT):{
         std::cout << "Unrecognized keyword at start of " << input_buffer << '\n';
+        continue;
+      }
+      case (PREPARE_INVALID_ARGS):{
+        std::cout << "Invalid_args: too long or wrong type or negative\n";
         continue;
       }
     }
@@ -247,7 +254,7 @@ int main(int argc,char **argv){
         continue;
       }
       case (EXECUTE_UNRECOGNIZED_STATEMENT):{
-        std::cout << "Unrecognized keyword\n";
+        std::cout << "Unrecognized keyword in statement\n";
         continue;
       }
     }
