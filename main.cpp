@@ -3,6 +3,20 @@ using namespace std;
 
 // 类型名用的驼峰
 // 变量名/函数名用的下划线分隔
+// 宏定义用全大写 + 下划线分隔
+
+#define ID_SIZE 4
+#define USERNAME_SIZE 32
+#define EMAIL_SIZE 255
+#define ID_OFFSET 0
+#define USERNAME_OFFSET ID_SIZE
+#define EMAIL_OFFSET (ID_SIZE+USERNAME_SIZE)
+
+#define PAGE_SIZE 4096 // 4kB 一页
+#define ROW_SIZE (ID_SIZE+USERNAME_SIZE+EMAIL_SIZE) // 291 byte
+#define TABLE_MAX_PAGES 100 // 暂时支持100页大小
+#define PAGE_MAX_ROWS (PAGE_SIZE / ROW_SIZE) // 一页多少行 14
+#define TABLE_MAX_ROWS (TABLE_MAX_PAGES * PAGE_MAX_ROWS) // 整个table支持的总行数
 
 // 标识meta_cmd是否合法
 typedef enum{
@@ -14,8 +28,15 @@ typedef enum{
 typedef enum{
   PREPARE_SUCCESS,
   PREPARE_UNRECOGNIZED_STATEMENT,
-  PREPARE_SYNTAX_ERROR
+  PREPARE_SYNTAX_ERROR,
+  PREPARE_INVALID_ARGS
 } PrepareResult;
+
+typedef enum{
+  EXECUTE_SUCCESS,
+  EXECUTE_TABLE_FULL,
+  EXECUTE_UNRECOGNIZED_STATEMENT
+} ExecuteResult;
 
 // 标识目前支持的关键字
 typedef enum{
@@ -25,11 +46,55 @@ typedef enum{
 
 // 行数据结构
 // | id | username | email | 结构的小型数据库
-struct Row{
-  int id;
-  string username;
-  string email;
+struct Row{ // total 291 byte
+  int id;  // 4 byte
+  char username[USERNAME_SIZE]; // max 32 byte 
+  char email[EMAIL_SIZE];    // max 255 byte
 };
+
+void print_row(Row* row) {
+  printf("(%d, %s, %s)\n", row->id, row->username, row->email);
+}
+
+struct Table{
+  int num_rows;
+  void* pages[TABLE_MAX_PAGES];
+
+  Table(){
+    num_rows = 0;
+    for(int i=0;i<TABLE_MAX_PAGES;i++){
+      pages[i] = nullptr;
+    }
+  }
+};
+
+// 返回table中第idx行的开始位置
+void* row_slot(Table* table, int idx){
+  int page_idx = idx / PAGE_MAX_ROWS;
+  void* page = table->pages[page_idx];
+  if(page == nullptr){
+    page = table->pages[page_idx] = new char[PAGE_SIZE];
+  }
+  int row_idx = idx % PAGE_MAX_ROWS;
+  void* ret = (char*)page + row_idx * ROW_SIZE;
+  return ret;
+}
+
+// 把row指向的行放到dest位置
+void put_row_to_table(Row* row, void* dest){
+  memcpy((char*)dest + ID_OFFSET, &(row->id), ID_SIZE);
+  memcpy((char*)dest + USERNAME_OFFSET, &(row->username), USERNAME_SIZE);
+  memcpy((char*)dest + EMAIL_OFFSET, &(row->email), EMAIL_SIZE);
+  return;
+}
+
+// 去除source位置的一行放进row指向的位置
+void get_row_from_table(Row* row, void* source){
+  memcpy(&(row->id), (char*)source + ID_OFFSET, ID_SIZE);
+  memcpy(&(row->username), (char*)source + USERNAME_OFFSET, USERNAME_SIZE);
+  memcpy(&(row->email), (char*)source + EMAIL_OFFSET, EMAIL_SIZE);
+  return;
+}
 
 struct Statement{
   StatementType type;
@@ -62,6 +127,10 @@ PrepareResult prepare_statment(string input_buffer, Statement* statement){
   if(args[0] == insert_str) {
     if(args.size() != 4) 
 
+    // 处理参数过长
+    if(args[2].size() >= USERNAME_SIZE) return PREPARE_INVALID_ARGS;
+    if(args[3].size() >= EMAIL_SIZE) return PREPARE_INVALID_ARGS;
+
     statement->type = INSERT;
     try{ // 处理args[1]不可解析为int的情况
       statement->row_to_insert.id = stoi(args[1]);
@@ -69,8 +138,8 @@ PrepareResult prepare_statment(string input_buffer, Statement* statement){
     catch (std::invalid_argument){
       return PREPARE_SYNTAX_ERROR;
     }
-    statement->row_to_insert.username = args[2];
-    statement->row_to_insert.email = args[3];
+    strcpy(statement->row_to_insert.username, args[2].c_str());
+    strcpy(statement->row_to_insert.email, args[3].c_str());
 
     return PREPARE_SUCCESS;
   }
@@ -86,22 +155,51 @@ PrepareResult prepare_statment(string input_buffer, Statement* statement){
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
+// 执行insert
+ExecuteResult execute_insert(Statement* statement, Table* table){
+  // 插入判满
+  if(table->num_rows >= TABLE_MAX_ROWS) return EXECUTE_TABLE_FULL;
+      
+  Row* row_to_insert = &(statement->row_to_insert);
+  // 把arg0放进arg1返回的位置
+
+  put_row_to_table(row_to_insert, row_slot(table, table->num_rows));
+
+  table->num_rows++;
+  cout << "Insert done.\n";
+  return EXECUTE_SUCCESS;
+}
+
+// 执行select
+ExecuteResult execute_select(Statement* statement, Table* table){
+  Row row_now;
+  for(int i=0;i<table->num_rows;i++){
+    get_row_from_table(&row_now, row_slot(table, i));
+    print_row(&row_now);
+  }
+  cout << "Select done.\n";
+  return EXECUTE_SUCCESS;
+}
+
 // 执行statement
-void execute_statment(Statement* statement){
+ExecuteResult execute_statment(Statement* statement, Table* table){
   switch (statement->type){
     case (INSERT):{
-      cout << "do insert here\n";
+      ExecuteResult res = execute_insert(statement, table);
       break;
     }
     case (SELECT):{
-      cout << "do select here\n";
+      ExecuteResult res = execute_select(statement, table);
       break;
     }
   }
+  return EXECUTE_UNRECOGNIZED_STATEMENT;
 }
 
 int main(int argc,char **argv){
   string input_buffer;
+  Table* table = new Table;
+
   while(1){
     std::cout << "db > ";
     getline(cin, input_buffer);
@@ -137,7 +235,7 @@ int main(int argc,char **argv){
       }
     }
 
-    execute_statment(&statement);
+    execute_statment(&statement, table);
     cout << "Executed\n";
   }
   return 0;
