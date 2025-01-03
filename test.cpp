@@ -54,10 +54,9 @@ TEST(DBtestCmd, InsertOneAndSelectAll) {
     std::vector<std::string> result = run_script(commands);
     // 存放正确的程序输出
     std::vector<std::string> expected = {
-        "db > Insert done",
-        "Executed",
-        "db > (1, user1, person1@example.com)",
-        "Select done",
+        "db > Executed",
+        "db > ",
+        "(1, user1, person1@example.com)",
         "Executed",
         "db > ",
     };
@@ -86,12 +85,11 @@ TEST(DBtestCmd, InsertOneLongAndSelectAll) {
     std::vector<std::string> result = run_script(commands);
 
     // 存放正确的程序输出
-    std::string the_only_row = "db > (1, " + long_username + ", " + long_email + ")";
+    std::string the_only_row = "(1, " + long_username + ", " + long_email + ")";
     std::vector<std::string> expected = {
-        "db > Insert done",
-        "Executed",
+        "db > Executed",
+        "db > ",
         the_only_row,
-        "Select done",
         "Executed",
         "db > ",
     };
@@ -115,15 +113,13 @@ TEST(DBtestCmd, InsertManyAndSelectAll) {
     std::vector<std::string> result = run_script(commands);
     std::vector<std::string> expected;
     for(int i=1;i<=1000;i++){
-        expected.push_back("db > Insert done");
-        expected.push_back("Executed");
+        expected.push_back("db > Executed");
     }
-    expected.push_back("db > (1, user1, person1@example.com)");
-    for(int i=2;i<=1000;i++){
+    expected.push_back("db > ");
+    for(int i=1;i<=1000;i++){
         std::string temp = "(" + std::to_string(i) + ", user" + std::to_string(i) + ", person" + std::to_string(i) + "@example.com)";
         expected.push_back(temp);
     }
-    expected.push_back("Select done");
     expected.push_back("Executed");
     expected.push_back("db > ");
     // 检查输出
@@ -147,19 +143,16 @@ TEST(DBtestCmd, InsertTooManyAndSelectAll) {
     std::vector<std::string> result = run_script(commands);
     std::vector<std::string> expected;
     for(int i=1;i<=1400;i++){
-        expected.push_back("db > Insert done");
-        expected.push_back("Executed");
+        expected.push_back("db > Executed");
     }
     for(int i=1401;i<=1410;i++){
-        expected.push_back("db > Insert not done Table full");
-        expected.push_back("Error: Table full");
+        expected.push_back("db > Error: Table full");
     }
-    expected.push_back("db > (1, user1, person1@example.com)");
-    for(int i=2;i<=1400;i++){
+    expected.push_back("db > ");
+    for(int i=1;i<=1400;i++){
         std::string temp = "(" + std::to_string(i) + ", user" + std::to_string(i) + ", person" + std::to_string(i) + "@example.com)";
         expected.push_back(temp);
     }
-    expected.push_back("Select done");
     expected.push_back("Executed");
     expected.push_back("db > ");
     // 检查输出
