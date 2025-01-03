@@ -100,6 +100,62 @@ TEST(DBtestCmd, InsertOneLongAndSelectAll) {
     }
 }
 
+// 单个insert 但username和email长度过大(不合法)
+TEST(DBtestCmd, InsertOneTooLongAndSelectAll) {
+    // 模拟用户输入
+    std::string long_username, long_email;
+    for(int i=0;i<USERNAME_SIZE;i++) long_username += "a";
+    for(int i=0;i<EMAIL_SIZE;i++) long_email += "b";
+    std::string insert_cmd = "insert 1 " + long_username + " " + long_email;
+
+    std::vector<std::string> commands = {
+        insert_cmd,
+        "select",
+        ".exit",
+    };
+
+    // 存放程序的真实输出
+    std::vector<std::string> result = run_script(commands);
+
+    // 存放正确的程序输出
+    std::string the_only_row = "(1, " + long_username + ", " + long_email + ")";
+    std::vector<std::string> expected = {
+        "db > Invalid_args: too long or wrong type or negative",
+        "db > ",
+        "Executed",
+        "db > ",
+    };
+    // 检查输出
+    EXPECT_EQ(result.size(), expected.size());
+    for(int i=0;i<result.size();i++){
+        EXPECT_EQ(result[i], expected[i]);
+    }
+}
+
+// 单个insert 但id为负数(不合法)
+TEST(DBtestCmd, InsertOneNegativeAndSelectAll) {
+    // 模拟用户输入
+    std::vector<std::string> commands = {
+        "insert -1 user1 person1@example.com",
+        "select",
+        ".exit",
+    };
+    // 存放程序的真实输出
+    std::vector<std::string> result = run_script(commands);
+    // 存放正确的程序输出
+    std::vector<std::string> expected = {
+        "db > Invalid_args: too long or wrong type or negative",
+        "db > ",
+        "Executed",
+        "db > ",
+    };
+    // 检查输出
+    EXPECT_EQ(result.size(), expected.size());
+    for(int i=0;i<result.size();i++){
+        EXPECT_EQ(result[i], expected[i]);
+    }
+}
+
 // 多个insert 但不超过table容量
 TEST(DBtestCmd, InsertManyAndSelectAll) {
     std::vector<std::string> commands;

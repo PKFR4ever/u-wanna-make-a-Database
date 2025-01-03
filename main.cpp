@@ -127,7 +127,7 @@ PrepareResult prepare_statment(std::string input_buffer, Statement* statement){
   // 目前适配的语法：
   // insert id(int) username(string) email(string)
   if(args[0] == insert_str) {
-    if(args.size() != 4) return PREPARE_INVALID_ARGS;
+    if(args.size() != 4) return PREPARE_SYNTAX_ERROR;
 
     // 处理参数过长
     if(args[2].size() >= USERNAME_SIZE) return PREPARE_INVALID_ARGS;
@@ -140,6 +140,7 @@ PrepareResult prepare_statment(std::string input_buffer, Statement* statement){
     catch (std::invalid_argument){
       return PREPARE_SYNTAX_ERROR;
     }
+    if(statement->row_to_insert.id < 0) return PREPARE_INVALID_ARGS;
     strcpy(statement->row_to_insert.username, args[2].c_str());
     strcpy(statement->row_to_insert.email, args[3].c_str());
 
@@ -237,6 +238,10 @@ int main(int argc,char **argv){
         std::cout << "Unrecognized keyword at start of " << input_buffer << '\n';
         continue;
       }
+      case (PREPARE_INVALID_ARGS):{
+        std::cout << "Invalid_args: too long or wrong type or negative\n";
+        continue;
+      }
     }
 
     switch (execute_statment(&statement, table)) {
@@ -249,7 +254,7 @@ int main(int argc,char **argv){
         continue;
       }
       case (EXECUTE_UNRECOGNIZED_STATEMENT):{
-        std::cout << "Unrecognized keyword\n";
+        std::cout << "Unrecognized keyword in statement\n";
         continue;
       }
     }
