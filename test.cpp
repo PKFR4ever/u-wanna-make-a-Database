@@ -25,7 +25,10 @@ std::vector<std::string> run_script(const std::vector<std::string>& commands) {
     script_file.close();
 
     // Execute the script and capture output
-    std::string command = "rundb.exe < " + temp_filename;
+    std::string command = "./rundb < " + temp_filename;
+    #ifdef _WIN32
+      command = "rundb.exe < " + temp_filename;
+    #endif
     std::ostringstream raw_output;
     FILE* pipe = popen(command.c_str(), "r");
     if (!pipe) {
