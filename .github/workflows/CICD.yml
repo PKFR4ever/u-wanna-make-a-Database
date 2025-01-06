@@ -58,6 +58,9 @@ jobs:
           name: build-artifacts
           path: build/
 
+      - name: Grant execute permission for tests
+        run: chmod +x build/tests
+
       - name: Test
         working-directory: ${{github.workspace}}/build
         # Execute tests defined by the CMake configuration.
