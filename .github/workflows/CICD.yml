@@ -47,6 +47,7 @@ jobs:
       
   test:
     runs-on: ubuntu-latest
+    needs: build # 确保 test 作业在 build 作业完成后运行
     steps:
       - uses: actions/checkout@v4
 
