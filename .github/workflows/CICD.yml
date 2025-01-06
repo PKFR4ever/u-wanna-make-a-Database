@@ -37,32 +37,9 @@ jobs:
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
-      
-    - name: Upload build artifacts
-      # 将构建产物上传供后续 job 使用
-      uses: actions/upload-artifact@v3
-      with:
-        name: build-artifacts
-        path: build/
-      
-  test:
-    runs-on: ubuntu-latest
-    needs: build # 确保 test 作业在 build 作业完成后运行
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Download build artifacts
-        # 下载先前上传的构件
-        uses: actions/download-artifact@v3
-        with:
-          name: build-artifacts
-          path: build/
-
-      - name: Grant execute permission for tests
-        run: chmod +x build/tests
-
-      - name: Test
-        working-directory: ${{github.workspace}}/build
-        # Execute tests defined by the CMake configuration.
-        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-        run: ./tests
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      # Execute tests defined by the CMake configuration.
+      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+      run: ./tests
