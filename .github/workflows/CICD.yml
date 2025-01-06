@@ -38,11 +38,25 @@ jobs:
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
       
+    - name: Upload build artifacts
+      # 将构建产物上传供后续 job 使用
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: build/
+      
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
+      - name: Download build artifacts
+        # 下载先前上传的构件
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: build/
+
       - name: Test
         working-directory: ${{github.workspace}}/build
         # Execute tests defined by the CMake configuration.
