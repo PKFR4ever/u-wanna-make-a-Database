@@ -24,8 +24,18 @@ std::vector<std::string> run_script(const std::vector<std::string>& commands) {
     }
     script_file.close();
 
+    // Execute the delete command first
+    std::string delete_command = "rm -rf testdb.db";
+    #ifdef _WIN32
+      delete_command = "del /f /q testdb.db"; // For Windows
+    #endif
+    int delete_status = std::system(delete_command.c_str());
+    if (delete_status != 0) {
+        throw std::runtime_error("Failed to delete testdb.db");
+    }
+
     // Execute the script and capture output
-    std::string command = "./rundb < " + temp_filename;
+    std::string command = "./rundb testdb.db < " + temp_filename;
     #ifdef _WIN32
       command = "rundb.exe < " + temp_filename;
     #endif
