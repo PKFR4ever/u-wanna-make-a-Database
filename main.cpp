@@ -65,6 +65,11 @@ void print_row(Row* row) {
   printf("(%d, %s, %s)\n", row->id, row->username, row->email);
 }
 
+bool empty_row(Row* row){
+  if(strlen(row->username) == 0) return true;
+  return false;
+}
+
 
 struct Pager{
   int file_descriptor;
@@ -79,9 +84,8 @@ struct Pager{
       std::cout << "Unable to open file\n";
       exit(EXIT_FAILURE);
     }
-    auto file_length = lseek(fd, 0, SEEK_END);
+    file_length = lseek(fd, 0, SEEK_END);
     file_descriptor = fd;
-    file_length = file_length;
     for(int i=0;i<TABLE_MAX_PAGES;i++){
       pages[i] = nullptr;
     }
@@ -292,6 +296,7 @@ ExecuteResult execute_select(Statement* statement, Table* table){
   std::cout << '\n';
   for(int i=0;i<table->num_rows;i++){
     get_row_from_table(&row_now, row_slot(table, i));
+    if(empty_row(&row_now)) break;
     print_row(&row_now);
   }
   return EXECUTE_SUCCESS;
