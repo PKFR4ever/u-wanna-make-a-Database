@@ -3,6 +3,9 @@
 #include <vector>
 #include <cstring>
 #include <sstream>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 
 // using namespace std;
 
@@ -62,32 +65,133 @@ void print_row(Row* row) {
   printf("(%d, %s, %s)\n", row->id, row->username, row->email);
 }
 
-struct Table{
-  int num_rows;
-  void* pages[TABLE_MAX_PAGES];
 
-  Table(){
-    num_rows = 0;
+struct Pager{
+  int file_descriptor;
+  int file_length;
+  char* pages[TABLE_MAX_PAGES];
+
+  Pager(const char* filename){
+    int fd = open(filename,
+                  O_RDWR | O_CREAT,   // r+w, create if not exist
+                  S_IWUSR | S_IRUSR); // 允许 r+w
+    if(fd == -1){
+      std::cout << "Unable to open file\n";
+      exit(EXIT_FAILURE);
+    }
+    auto file_length = lseek(fd, 0, SEEK_END);
+    file_descriptor = fd;
+    file_length = file_length;
     for(int i=0;i<TABLE_MAX_PAGES;i++){
       pages[i] = nullptr;
     }
   }
+
+  void pager_flush(int page_idx, int size){
+    if(pages[page_idx] == nullptr){
+      std::cout << "Tried to flush null page\n";
+      exit(EXIT_FAILURE);
+    }
+    auto offset = lseek(file_descriptor, page_idx * PAGE_SIZE, SEEK_SET);
+    if(offset == -1){
+      std::cout << "Error seeking: " << errno << '\n';
+      exit(EXIT_FAILURE);
+    }
+
+    ssize_t bytes_written = write(file_descriptor, pages[page_idx], size);
+    if(bytes_written == -1){
+      std::cout << "Error writing " << errno << '\n';
+      exit(EXIT_FAILURE);
+    }
+  }
+};
+
+// 通过pager获取table中的page_idx
+char* get_page(Pager* pager, int page_idx){
+  if(page_idx > TABLE_MAX_PAGES){
+    std::cout << "Tried to fetch page number out of bounds.\n";
+    exit(EXIT_FAILURE);
+  }
+  // 分页器中第page_idx页不存在
+  if(pager->pages[page_idx] == nullptr){
+    // cache miss 分配新page
+    char* page = new char[PAGE_SIZE];
+    // num_pages: 该pager对应的file中有几个pages
+    int num_pages = pager->file_length / PAGE_SIZE;
+    if(pager->file_length % PAGE_SIZE) num_pages++;
+
+    // page_idx是在这个pager对应的file中的
+    if(page_idx <= num_pages){ 
+      lseek(pager->file_descriptor, page_idx * PAGE_SIZE, SEEK_SET);
+      auto bytes_read = read(pager->file_descriptor, page, PAGE_SIZE);
+      if(bytes_read == -1){
+        std::cout << "Error reading file: " << errno << '\n';
+        exit(EXIT_FAILURE);
+      }
+    }
+
+    // 把新page放进pager的page_idx位置
+    pager->pages[page_idx] = page;
+  }
+  return pager->pages[page_idx];; 
+}
+
+struct Table{
+  int num_rows;
+  Pager* pager;
+
+  Table(const char* filename){
+    pager = new Pager(filename);
+    num_rows = pager->file_length / ROW_SIZE;
+  }
+
+  void db_close(){
+    // table 中多少个满page
+    int num_full_pages = num_rows / PAGE_MAX_ROWS;
+    for(int i=0;i<num_full_pages;i++){
+      if(pager->pages[i] == nullptr) continue;
+      pager->pager_flush(i, PAGE_SIZE);
+      delete pager->pages[i];
+      pager->pages[i] = nullptr;
+    }
+
+    int more_rows = num_rows % PAGE_MAX_ROWS;
+    if(more_rows > 0){
+      int page_idx = num_full_pages;
+      if(pager->pages[page_idx]!=nullptr){
+        pager->pager_flush(page_idx, PAGE_SIZE);
+        delete pager->pages[page_idx];
+        pager->pages[page_idx] = nullptr;
+      }
+    }
+
+    int res = close(pager->file_descriptor);
+    if(res == -1){
+      std::cout << "Error closing db file.\n";
+      exit(EXIT_FAILURE);
+    }
+    for(int i=0;i<TABLE_MAX_PAGES;i++){
+      char* page = pager->pages[i];
+      if(page){
+        delete page;
+        pager->pages[i] = nullptr;
+      }
+    }
+    delete pager;
+  }
 };
 
 // 返回table中第idx行的开始位置
-void* row_slot(Table* table, int idx){
+char* row_slot(Table* table, int idx){
   int page_idx = idx / PAGE_MAX_ROWS;
-  void* page = table->pages[page_idx];
-  if(page == nullptr){
-    page = table->pages[page_idx] = new char[PAGE_SIZE];
-  }
+  char* page = get_page(table->pager, page_idx);
   int row_idx = idx % PAGE_MAX_ROWS;
-  void* ret = (char*)page + row_idx * ROW_SIZE;
+  char* ret = (char*)page + row_idx * ROW_SIZE;
   return ret;
 }
 
 // 把row指向的行放到dest位置
-void put_row_to_table(Row* row, void* dest){
+void put_row_to_table(Row* row, char* dest){
   memcpy((char*)dest + ID_OFFSET, &(row->id), ID_SIZE);
   memcpy((char*)dest + USERNAME_OFFSET, &(row->username), USERNAME_SIZE);
   memcpy((char*)dest + EMAIL_OFFSET, &(row->email), EMAIL_SIZE);
@@ -95,7 +199,7 @@ void put_row_to_table(Row* row, void* dest){
 }
 
 // 去除source位置的一行放进row指向的位置
-void get_row_from_table(Row* row, void* source){
+void get_row_from_table(Row* row, char* source){
   memcpy(&(row->id), (char*)source + ID_OFFSET, ID_SIZE);
   memcpy(&(row->username), (char*)source + USERNAME_OFFSET, USERNAME_SIZE);
   memcpy(&(row->email), (char*)source + EMAIL_OFFSET, EMAIL_SIZE);
@@ -109,8 +213,12 @@ struct Statement{
 
 // 处理 .开头的meta cmd 这些都不是sql语句
 // 目前只能处理.exit
-MetaCmdResult do_meta_cmd(std::string meta_cmd){
-  if(meta_cmd == ".exit") exit(0);
+MetaCmdResult do_meta_cmd(std::string meta_cmd, Table* table){
+  if(meta_cmd == ".exit"){
+    table->db_close();
+    delete table;
+    exit(EXIT_SUCCESS);
+  }
   return META_CMD_UNRECOGNIZED;
 }
 
@@ -206,9 +314,15 @@ ExecuteResult execute_statment(Statement* statement, Table* table){
 }
 
 int main(int argc,char **argv){
-  std::string input_buffer;
-  Table* table = new Table;
+  if(argc < 2){
+    std::cout << "Must supply a database filename.\n";
+    exit(EXIT_FAILURE);
+  }
 
+  char* filename = argv[1];
+  Table* table = new Table(filename);
+
+  std::string input_buffer;
   while(1){
     std::cout << "db > ";
     std::getline(std::cin, input_buffer);
@@ -217,7 +331,7 @@ int main(int argc,char **argv){
 
     // 处理 .开头的meta cmd
     if(input_buffer[0] == '.'){
-      switch (do_meta_cmd(input_buffer)){
+      switch (do_meta_cmd(input_buffer, table)){
         case (META_CMD_SUCCESS):{
           continue;
         }
